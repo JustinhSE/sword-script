@@ -1,3 +1,4 @@
+
 #!/bin/bash
 
 # --- DEPENDENCY CHECKS ---
@@ -185,7 +186,7 @@ echo " ║ attitudes of the heart.                        - Hebrews 4:12     ║
 echo " ╚═══════════════════════════════════════════════════════════════════╝"
 echo -e "\033[0m"
 
-# --- 3. SELECTION LOGIC (70% Review / 30% New) ---
+# --- 2. SELECTION LOGIC ---
 ROLL=$(( ( RANDOM % 100 ) + 1 ))
 REVIEW_COUNT=$(grep -v "|$MASTERY_LEVEL$" "$PROGRESS_FILE" 2>/dev/null | wc -l | xargs)
 
@@ -196,28 +197,28 @@ if [ "$REVIEW_COUNT" -gt 0 ] && [ "$ROLL" -le 70 ]; then
     CURRENT_LEVEL=$(echo "$ENTRY" | cut -d'|' -f2)
     URL_REF=$(echo "$REFERENCE" | jq -sRr @uri)
     DATA=$(curl -s "https://bible-api.com/$URL_REF?translation=$VERSION")
-    
-    if [ -z "$DATA" ] || [ "$DATA" == "null" ]; then
-        echo "❌ API error. Using NEW mode fallback..."
-        MODE="NEW"
-        DATA=$(curl -s "https://bible-api.com/data/$VERSION/random/$CATEGORY")
-    fi
 else
     MODE="NEW"
-    DATA=$(curl -s "https://bible-api.com/data/$VERSION/random/$CATEGORY")
-fi
-
-VERSE_TEXT=$(echo "$DATA" | jq -r '.text' | tr -d '\n' | sed 's/  */ /g')
-REFERENCE=$(echo "$DATA" | jq -r '.reference')
-
-if [[ "$MODE" == "NEW" ]]; then
+    DATA=$(curl -s "https://bible-api.com/data/$VERSION/random")
+    REFERENCE=$(echo "$DATA" | jq -r '.reference // empty')
     CURRENT_LEVEL=$(grep "^$REFERENCE|" "$PROGRESS_FILE" 2>/dev/null | cut -d'|' -f2)
     : ${CURRENT_LEVEL:=1}
 fi
 
-# --- 4. DISPLAY CHALLENGE ---
-echo -e "\033[1;35m[$MODE MODE] -- Level $CURRENT_LEVEL\033[0m"
-echo -e "\033[1;37mRef: $REFERENCE\033[0m"
+# CRITICAL FIX: Ensure variables are never "null"
+VERSE_TEXT=$(echo "$DATA" | jq -r '.text // empty' | tr -d '\n' | sed 's/  */ /g')
+REFERENCE=$(echo "$DATA" | jq -r '.reference // empty')
+
+if [[ -z "$VERSE_TEXT" || "$VERSE_TEXT" == "null" ]]; then
+    REFERENCE="Psalm 119:105"
+    VERSE_TEXT="Thy word is a lamp unto my feet, and a light unto my path."
+    CURRENT_LEVEL=1
+    MODE="OFFLINE/FAILSAFE"
+fi
+
+# --- 3. CHALLENGE DISPLAY ---
+printf "\033[1;35m[%s MODE] -- Level %s\033[0m\n" "$MODE" "$CURRENT_LEVEL"
+printf "\033[1;37mRef: %s\033[0m\n" "$REFERENCE"
 
 generate_skeleton() {
     echo "$VERSE_TEXT" | awk '{
@@ -236,10 +237,9 @@ case $CURRENT_LEVEL in
     3) echo "???" | cowsay -f tux -W 50 | lolcat ;;
 esac
 
-# --- 5. INTERACTIVE LOOP ---
-echo -e "\n\033[1;33m⚔️  Draw your Sword (Type the verse) or 'skip':\033[0m"
+# --- 4. INPUT LOOP ---
+printf "\n\033[1;33m⚔️  Type the verse or 'skip':\033[0m\n"
 
-ATTEMPT=0
 while true; do
     read -p "> " USER_INPUT
     [[ "$USER_INPUT" == "quit" || "$USER_INPUT" == "skip" ]] && exit 0
@@ -249,31 +249,110 @@ while true; do
 
     SIMILARITY=$(python3 <<EOF
 from rapidfuzz import fuzz
-text = """$CLEAN_TEXT"""
-user = """$CLEAN_INPUT"""
-print(fuzz.ratio(text, user))
+print(fuzz.ratio("""$CLEAN_TEXT""", """$CLEAN_INPUT"""))
 EOF
 )
 
     if [ $(echo "$SIMILARITY > 85" | bc) -ne 0 ]; then
-        echo -e "\033[1;32m✨ STRIKE! Correct ($SIMILARITY% match)\033[0m"
+        printf "\033[1;32m✨ STRIKE! Correct (%s%% match)\033[0m\n" "$SIMILARITY"
         NEW_LEVEL=$((CURRENT_LEVEL + 1))
         [ $NEW_LEVEL -gt $MASTERY_LEVEL ] && NEW_LEVEL=$MASTERY_LEVEL
         grep -v "^$REFERENCE|" "$PROGRESS_FILE" 2>/dev/null > "${PROGRESS_FILE}.tmp"
         echo "$REFERENCE|$NEW_LEVEL" >> "${PROGRESS_FILE}.tmp"
         mv "${PROGRESS_FILE}.tmp" "$PROGRESS_FILE"
-        echo -e "\033[1;36mLevel Up -> Now Level $NEW_LEVEL\033[0m"
         break
     else
-        ATTEMPT=$((ATTEMPT + 1))
-        echo -e "\033[1;31m❌ Parry! Try again ($SIMILARITY%). Hint: 'skip'\033[0m"
-        
-        if [ "$CURRENT_LEVEL" -eq 3 ] && [ "$ATTEMPT" -ge 2 ]; then
-            echo -e "\033[1;33m💡 Hint: $(generate_skeleton)\033[0m"
-        fi
-        
-        if [ "$ATTEMPT" -ge 3 ]; then
-            echo -e "\033[1;30mReveal: $VERSE_TEXT\033[0m"
-        fi
+        printf "\033[1;31m❌ Parry! Try again (%s%%). Hint: 'skip'\033[0m\n" "$SIMILARITY"
     fi
 done
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
